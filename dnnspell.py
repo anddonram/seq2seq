@@ -1,5 +1,3 @@
-from nltk import FreqDist
-import nltk
 
 from keras.models import Model,Sequential,load_model
 from keras.layers import Dense,Dropout, RepeatVector, Activation, LSTM, TimeDistributed, Input,recurrent,Masking
