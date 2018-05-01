@@ -1,11 +1,11 @@
-#Seq2seq
+# Seq2seq
 Some models (Attention one) require recurrentshop. See for more instructions:
 
 https://github.com/farizrahman4u/seq2seq
 
 
 
-#References
+# References
 
 
 https://github.com/keras-team/keras/blob/master/examples/lstm_seq2seq.py#L153

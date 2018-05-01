@@ -13,8 +13,8 @@ from seq2seq.models import AttentionSeq2Seq,Seq2Seq
 chars="qwertyuiopasdfghjklñzxcvbnm"
 import ast
 #Hidden layer size
-latent_dim=512
-batch_size=128
+latent_dim=256
+batch_size=64
 LSTM_LAYERS=2
 DROPOUT=0.2
 
@@ -567,35 +567,35 @@ def generate_model(params_filename,read_filename,num_samples):
 
 def attention_model(params_filename,read_filename,samples):
 	corrected_text=read_file(read_filename,samples)
-	wrong_text=[noise(text,2) for text in corrected_text]
-	corrected_text=[text+'\n' for text in corrected_text]
-	repeats=8
-	for i in range(repeats-1):
-		wrong_text.extend(noise(text,1) for text in corrected_text)
-
-	corrected_text=corrected_text*repeats
-
-	input_token_index,target_token_index,\
-			input_characters,target_characters,\
-			max_encoder_seq_length,num_encoder_tokens,\
-			max_decoder_seq_length,num_decoder_tokens=get_parameters_from_file(params_filename)
-
-	encoder_input_data, decoder_input_data, decoder_target_data = text_to_matrix(wrong_text, corrected_text,samples*repeats,
-			max_encoder_seq_length, num_encoder_tokens,
-			max_decoder_seq_length, num_decoder_tokens,
-			input_token_index,target_token_index)
-
-	model = AttentionSeq2Seq(input_dim=num_encoder_tokens, input_length=max_encoder_seq_length,
-			hidden_dim=latent_dim,
-			output_length=max_decoder_seq_length, output_dim=num_decoder_tokens,
-			depth=LSTM_LAYERS,dropout=DROPOUT)
-
-	model.compile(loss='mse', optimizer='rmsprop',metrics=['acc'])
-	print(model.summary())
-	model.fit(encoder_input_data, decoder_input_data,
-			  batch_size=batch_size,
-			  epochs=epochs,validation_split=0.125)
-	model.save("attention.h5")
+	# wrong_text=[noise(text,2) for text in corrected_text]
+	# corrected_text=[text+'\n' for text in corrected_text]
+	# repeats=8
+	# for i in range(repeats-1):
+	# 	wrong_text.extend(noise(text,1) for text in corrected_text)
+	#
+	# corrected_text=corrected_text*repeats
+	#
+	# input_token_index,target_token_index,\
+	# 		input_characters,target_characters,\
+	# 		max_encoder_seq_length,num_encoder_tokens,\
+	# 		max_decoder_seq_length,num_decoder_tokens=get_parameters_from_file(params_filename)
+	#
+	# encoder_input_data, decoder_input_data, decoder_target_data = text_to_matrix(wrong_text, corrected_text,samples*repeats,
+	# 		max_encoder_seq_length, num_encoder_tokens,
+	# 		max_decoder_seq_length, num_decoder_tokens,
+	# 		input_token_index,target_token_index)
+	#
+	# model = AttentionSeq2Seq(input_dim=num_encoder_tokens, input_length=max_encoder_seq_length,
+	# 		hidden_dim=latent_dim,
+	# 		output_length=max_decoder_seq_length, output_dim=num_decoder_tokens,
+	# 		depth=LSTM_LAYERS,dropout=DROPOUT)
+	#
+	# model.compile(loss='mse', optimizer='rmsprop',metrics=['acc'])
+	# print(model.summary())
+	# model.fit(encoder_input_data, decoder_input_data,
+	# 		  batch_size=batch_size,
+	# 		  epochs=epochs,validation_split=0.125)
+	# model.save("attention.h5")
 
 	# for i in range(10):
 	# 	input_seq = encoder_input_data[i:i+1]
@@ -663,37 +663,37 @@ def load_autoencoder_model(filepath,params_filename,read_filename,num_samples,tr
 def load_attention(filepath,params_filename,read_filename,samples,train,epochs):
 
 	corrected_text=read_file(read_filename,samples)
-	wrong_text=[noise(text,2) for text in corrected_text]
-	corrected_text=[text+'\n' for text in corrected_text]
-
-	input_token_index,target_token_index,\
-			input_characters,target_characters,\
-			max_encoder_seq_length,num_encoder_tokens,\
-			max_decoder_seq_length,num_decoder_tokens=get_parameters_from_file(params_filename)
-
-	encoder_input_data, decoder_input_data, decoder_target_data = text_to_matrix(wrong_text, corrected_text,samples,
-			max_encoder_seq_length, num_encoder_tokens,
-			max_decoder_seq_length, num_decoder_tokens,
-			input_token_index,target_token_index)
-
-	model = AttentionSeq2Seq(input_dim=num_encoder_tokens, input_length=max_encoder_seq_length,
-			hidden_dim=latent_dim,
-			output_length=max_decoder_seq_length, output_dim=num_decoder_tokens,
-			depth=LSTM_LAYERS,dropout=DROPOUT)
-
-	model.load_weights(filepath)
-
-	for i in range(10):
-		input_seq = encoder_input_data[i:i+1]
-		target_sequence=model.predict(input_seq)
-
-		decoded_sentence = "".join([target_characters[np.argmax(token)] for token in target_sequence[0,:]])
-		if decoded_sentence.find("\n")!=-1:
-			decoded_sentence=decoded_sentence[0:decoded_sentence.find("\n")]
-		print('-')
-		print('Input sentence:', wrong_text[i])
-		print('Decoded sentence:', decoded_sentence)
-		print('Expected sentence:', corrected_text[i])
+	# wrong_text=[noise(text,2) for text in corrected_text]
+	# corrected_text=[text+'\n' for text in corrected_text]
+	#
+	# input_token_index,target_token_index,\
+	# 		input_characters,target_characters,\
+	# 		max_encoder_seq_length,num_encoder_tokens,\
+	# 		max_decoder_seq_length,num_decoder_tokens=get_parameters_from_file(params_filename)
+	#
+	# encoder_input_data, decoder_input_data, decoder_target_data = text_to_matrix(wrong_text, corrected_text,samples,
+	# 		max_encoder_seq_length, num_encoder_tokens,
+	# 		max_decoder_seq_length, num_decoder_tokens,
+	# 		input_token_index,target_token_index)
+	#
+	# model = AttentionSeq2Seq(input_dim=num_encoder_tokens, input_length=max_encoder_seq_length,
+	# 		hidden_dim=latent_dim,
+	# 		output_length=max_decoder_seq_length, output_dim=num_decoder_tokens,
+	# 		depth=LSTM_LAYERS,dropout=DROPOUT)
+	#
+	# model.load_weights(filepath)
+	#
+	# for i in range(10):
+	# 	input_seq = encoder_input_data[i:i+1]
+	# 	target_sequence=model.predict(input_seq)
+	#
+	# 	decoded_sentence = "".join([target_characters[np.argmax(token)] for token in target_sequence[0,:]])
+	# 	if decoded_sentence.find("\n")!=-1:
+	# 		decoded_sentence=decoded_sentence[0:decoded_sentence.find("\n")]
+	# 	print('-')
+	# 	print('Input sentence:', wrong_text[i])
+	# 	print('Decoded sentence:', decoded_sentence)
+	# 	print('Expected sentence:', corrected_text[i])
 
 
 if __name__=="__main__":
