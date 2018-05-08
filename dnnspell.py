@@ -4,7 +4,7 @@ from keras.layers import Dense,Dropout, RepeatVector, Activation, LSTM, TimeDist
 from keras.utils.vis_utils import plot_model
 import numpy as np
 import random
-
+from nltk import FreqDist
 import seq2seq
 from seq2seq.models import AttentionSeq2Seq,Seq2Seq
 
@@ -171,9 +171,16 @@ def text_to_matrix(wrong_text, corrected_text,num_texts,
 				decoder_target_data[i, t - 1, target_token_index[char]] = 1.0
 	return encoder_input_data, decoder_input_data, decoder_target_data
 
-def create_training_model(num_encoder_tokens,num_decoder_tokens):
+def create_autoencoder_model(model_filename,params_filename):
+	input_token_index,target_token_index,\
+			input_characters,target_characters,\
+			max_encoder_seq_length,num_encoder_tokens,\
+			max_decoder_seq_length,num_decoder_tokens=get_parameters_from_file(params_filename)
+	create_training_model(model_filename,num_encoder_tokens,num_decoder_tokens)
+
+def create_training_model(model_filename,num_encoder_tokens,num_decoder_tokens):
 	#Input,
-	encoder_inputs = Masking(Input(shape=(None, num_encoder_tokens)))
+	encoder_inputs = Input(shape=(None, num_encoder_tokens))
 
 
 	encoder = LSTM(latent_dim, return_state=True,dropout=DROPOUT,recurrent_dropout=DROPOUT)
@@ -201,17 +208,11 @@ def create_training_model(num_encoder_tokens,num_decoder_tokens):
 	# Run training
 
 	model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['acc'])
+	model.save(model_filename)
 	#model.compile(optimizer='rmsprop', loss='categorical_crossentropy')
 	return model,encoder_inputs,encoder_states,decoder_inputs,decoder_lstm,decoder_dense
 
-def train_model(model,encoder_input_data,decoder_input_data,decoder_target_data,epochs,filename=None):
-	model.fit([encoder_input_data, decoder_input_data], decoder_target_data,
-	          batch_size=batch_size,
-	          epochs=epochs,
-	          validation_split=0.2)
-	# Save model
-	if filename:
-		model.save(filename)
+
 
 def recover_model(filename):
     model=load_model(filename)
@@ -301,76 +302,79 @@ def get_parameters(wrong_text,corrected_text,wrong_freq,corrected_freq):
 	num_decoder_tokens=corrected_freq.B()
 	return max_encoder_seq_length,num_encoder_tokens,max_decoder_seq_length,num_decoder_tokens
 
-def create_dnnspell(model_filename,from_file,train,epochs,num_samples,filename,bigrams,params_filename):
-	EXAMPLES=5
+def validate_autoencoder_model(model_filename,epochs,num_samples,samples_filename,bigrams,params_filename,repeats):
 
 	noise_per_bigram=2 if bigrams else 1
+	corrected_text=read_file(samples_filename,num_samples)
+	wrong_text=[noise(text,noise_per_bigram)+'\n' for text in corrected_text]
 
-
-	corrected_text=read_file(filename,num_samples)
-
-	wrong_text=[noise(text,noise_per_bigram)[::-1] for text in corrected_text]
-	#Also add original text without noise
-	#wrong_text=corrected_text
-	wrong_text.extend(w[::-1] for w in corrected_text)
-	corrected_text.extend(corrected_text)
+	samples=len(corrected_text)*repeats
+	for i in range(repeats-1):
+		wrong_text.extend(noise(text,noise_per_bigram)+'\n' for text in corrected_text)
 
 	corrected_text=['\t'+text+'\n' for text in corrected_text]
+	corrected_text=corrected_text*repeats
+
 	input_token_index,target_token_index,\
 		input_characters,target_characters,\
 		wrong_freq,corrected_freq=generate_tokens(wrong_text,corrected_text)
 
 	print(input_token_index)
 	num_texts=len(wrong_text)
-	max_encoder_seq_length,num_encoder_tokens,\
-		max_decoder_seq_length,num_decoder_tokens=get_parameters(\
-		wrong_text,corrected_text,wrong_freq,corrected_freq)
-	if params_filename:
-		input_token_index,target_token_index,\
-				input_characters,target_characters,\
-				max_encoder_seq_length,num_encoder_tokens,\
-				max_decoder_seq_length,num_decoder_tokens=get_parameters_from_file(params_filename)
+
+	input_token_index,target_token_index,\
+			input_characters,target_characters,\
+			max_encoder_seq_length,num_encoder_tokens,\
+			max_decoder_seq_length,num_decoder_tokens=get_parameters_from_file(params_filename)
 	print('Number of unique input tokens:', num_encoder_tokens)
 	print('Number of unique output tokens:', num_decoder_tokens)
 	print('Max sequence length for inputs:', max_encoder_seq_length)
 	print('Max sequence length for outputs:', max_decoder_seq_length)
 
-	samples_batch=60000
+	samples_batch=40000
 	real_batch=min(num_texts,samples_batch)
 	encoder_input_data, decoder_input_data, decoder_target_data =text_to_matrix(wrong_text[:real_batch], corrected_text[:real_batch],real_batch,
 			max_encoder_seq_length, num_encoder_tokens,
 			max_decoder_seq_length, num_decoder_tokens,
 			input_token_index,target_token_index)
 
-	if from_file:
-		#Read from file
-		model,encoder_model,decoder_model=recover_model(model_filename)
-		if train:
-			#Only retrain and save if requested
-			for epoch in range(epochs):
-				for i in range(0,num_texts,samples_batch):
-					real_batch=min(num_texts-i,samples_batch)
-					encoder_input_data, decoder_input_data, decoder_target_data = text_to_matrix(wrong_text[i:i+real_batch], corrected_text[i:i+real_batch],real_batch,
-							max_encoder_seq_length, num_encoder_tokens,
-							max_decoder_seq_length, num_decoder_tokens,
-							input_token_index,target_token_index)
-					train_model(model,encoder_input_data,decoder_input_data,decoder_target_data,1,model_filename)
-	else:
-		#Create model, train and save it
-		model,encoder_inputs,encoder_states,decoder_inputs,decoder_lstm,decoder_dense=create_training_model(num_encoder_tokens,num_decoder_tokens)
-		train_model(model,encoder_input_data,decoder_input_data,decoder_target_data,epochs,model_filename)
-		encoder_model,decoder_model=create_inference_model(encoder_inputs,encoder_states,decoder_inputs,decoder_lstm,decoder_dense)
+	#Read from file
+	model,encoder_model,decoder_model=recover_model(model_filename)
+	if epochs:
+		#Only retrain and save if requested
+		for epoch in range(epochs):
+			for i in range(0,num_texts,samples_batch):
+				real_batch=min(num_texts-i,samples_batch)
+				encoder_input_data, decoder_input_data, decoder_target_data = text_to_matrix(wrong_text[i:i+real_batch], corrected_text[i:i+real_batch],real_batch,
+						max_encoder_seq_length, num_encoder_tokens,
+						max_decoder_seq_length, num_decoder_tokens,
+						input_token_index,target_token_index)
+				model.fit([encoder_input_data, decoder_input_data], decoder_target_data,
+				          batch_size=batch_size,
+				          epochs=1,
+				          validation_split=1/repeats)
+				# Save model
+		model.save(model_filename)
 
 
-	for seq_index in range(EXAMPLES):
+	samples=20
+	success=0
+	for seq_index in range(samples):
 		# Take one sequence (part of the training set)
 		# for trying out decoding.
 		input_seq = encoder_input_data[seq_index: seq_index + 1]
 		decoded_sentence = decode_sequence(input_seq,input_characters,target_characters,
 					encoder_model,decoder_model,num_decoder_tokens,target_token_index,max_decoder_seq_length)
-		print('-')
-		print('Input sentence:', wrong_text[seq_index][::-1])
-		print('Decoded sentence:', decoded_sentence)
+
+		if decoded_sentence==corrected_text[i][0:-1]:
+			success=success+1
+		else:
+			print('-')
+			print('Input sentence:', wrong_text[seq_index])
+			print('Decoded sentence:', decoded_sentence)
+			print('Expected sentence:', corrected_text[seq_index])
+
+	print("Accuracy:",success/samples)
 def spell_checker(model_filename,params_filename,word):
 	model,encoder_model,decoder_model=recover_model(model_filename)
 
@@ -396,38 +400,8 @@ def plot_dnn(filename):
 	model,encoder_model,decoder_model=recover_model(filename)
 	plot_model(model, to_file='model.png')
 	plot_model(encoder_model, to_file='encoder_model.png')
-
 	plot_model(decoder_model, to_file='decoder_model.png')
 
-def check_accuracy(model_filename,params_filename,read_filename,samples):
-	corrected_text=read_file(read_filename,samples)
-	wrong_text=[noise(text,2)[::-1] for text in corrected_text]
-	model,encoder_model,decoder_model=recover_model(model_filename)
-
-	input_token_index,target_token_index,\
-			input_characters,target_characters,\
-			max_encoder_seq_length,num_encoder_tokens,\
-			max_decoder_seq_length,num_decoder_tokens=get_parameters_from_file(params_filename)
-
-	encoder_input_data, decoder_input_data, decoder_target_data = text_to_matrix(wrong_text, corrected_text,samples,
-			max_encoder_seq_length, num_encoder_tokens,
-			max_decoder_seq_length, num_decoder_tokens,
-			input_token_index,target_token_index)
-
-	success=0
-	for i in range(samples):
-		input_seq = encoder_input_data[i:i+1]
-
-		decoded_sentence = decode_sequence(input_seq,input_characters,target_characters,
-					encoder_model,decoder_model,num_decoder_tokens,target_token_index,max_decoder_seq_length).strip()
-		print('-')
-		print('Input sentence:', wrong_text[i][::-1])
-		print('Decoded sentence:', decoded_sentence)
-		print('Expected sentence:', corrected_text[i])
-		if decoded_sentence==corrected_text[i]:
-			success=success+1
-
-	print("Accuracy:",success/samples)
 
 
 #####################################
@@ -521,13 +495,13 @@ def validate_model(corrected_text,wrong_text,encoder_input_data,target_character
 
 	print("Accuracy:",success/samples)
 
-def train_model(model_filename,model,params_filename,samples_filename,num_samples,epochs,repeats):
+def validate_model(model_filename,model,params_filename,samples_filename,num_samples,epochs,repeats):
 	corrected_text=read_file(samples_filename,num_samples)
-	wrong_text=[noise(text,2)+'\n' for text in corrected_text]
+	wrong_text=[noise(text,1)+'\n' for text in corrected_text]
 
 	samples=len(corrected_text)*repeats
 	for i in range(repeats-1):
-		wrong_text.extend(noise(text,1) for text in corrected_text)
+		wrong_text.extend(noise(text,1)+'\n' for text in corrected_text)
 
 	corrected_text=['\t'+text+'\n' for text in corrected_text]
 	corrected_text=corrected_text*repeats
@@ -658,9 +632,10 @@ if __name__=="__main__":
 		elif args.seq2seq:
 			model=load_seq2seq_model(model_filename)
 		if model:
-			train_model(model_filename,model,params_filename,samples_filename,num_samples,epochs,repeats)
+			validate_model(model_filename,model,params_filename,samples_filename,num_samples,epochs,repeats)
 		else:
-			check_accuracy(model_filename,params_filename,samples_filename,num_samples)
+			validate_autoencoder_model(model_filename,epochs,num_samples,samples_filename,bigrams,params_filename,repeats)
+
 	elif args.attention:
 		create_attention_model(model_filename,params_filename)
 	elif args.seq2seq:
@@ -670,5 +645,4 @@ if __name__=="__main__":
 	elif args.write:
 		save_parameters_to_file(samples_filename,params_filename)
 	else:
-		create_dnnspell(model_filename,from_file,epochs,
-			num_samples,samples_filename,bigrams,params_filename)
+		create_autoencoder_model(model_filename,params_filename)
