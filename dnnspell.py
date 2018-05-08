@@ -173,7 +173,9 @@ def text_to_matrix(wrong_text, corrected_text,num_texts,
 
 def create_training_model(num_encoder_tokens,num_decoder_tokens):
 	#Input,
-	encoder_inputs = Input(shape=(None, num_encoder_tokens))
+	encoder_inputs = Masking(Input(shape=(None, num_encoder_tokens)))
+
+
 	encoder = LSTM(latent_dim, return_state=True,dropout=DROPOUT,recurrent_dropout=DROPOUT)
 	encoder_outputs, state_h, state_c = encoder(encoder_inputs)
 	# We discard `encoder_outputs` and only keep the states.
@@ -202,17 +204,17 @@ def create_training_model(num_encoder_tokens,num_decoder_tokens):
 	#model.compile(optimizer='rmsprop', loss='categorical_crossentropy')
 	return model,encoder_inputs,encoder_states,decoder_inputs,decoder_lstm,decoder_dense
 
-def train_model(model,encoder_input_data,decoder_input_data,decoder_target_data,epochs,filepath=None):
+def train_model(model,encoder_input_data,decoder_input_data,decoder_target_data,epochs,filename=None):
 	model.fit([encoder_input_data, decoder_input_data], decoder_target_data,
 	          batch_size=batch_size,
 	          epochs=epochs,
 	          validation_split=0.2)
 	# Save model
-	if filepath:
-		model.save(filepath)
+	if filename:
+		model.save(filename)
 
-def recover_model(filepath):
-    model=load_model(filepath)
+def recover_model(filename):
+    model=load_model(filename)
 
     encoder_inputs = model.input[0]   # input_1
     encoder_outputs, state_h_enc, state_c_enc = model.layers[2].output   # lstm_1
@@ -299,7 +301,7 @@ def get_parameters(wrong_text,corrected_text,wrong_freq,corrected_freq):
 	num_decoder_tokens=corrected_freq.B()
 	return max_encoder_seq_length,num_encoder_tokens,max_decoder_seq_length,num_decoder_tokens
 
-def create_dnnspell(model_filepath,from_file,train,epochs,num_samples,filename,bigrams,params_filename):
+def create_dnnspell(model_filename,from_file,train,epochs,num_samples,filename,bigrams,params_filename):
 	EXAMPLES=5
 
 	noise_per_bigram=2 if bigrams else 1
@@ -342,7 +344,7 @@ def create_dnnspell(model_filepath,from_file,train,epochs,num_samples,filename,b
 
 	if from_file:
 		#Read from file
-		model,encoder_model,decoder_model=recover_model(model_filepath)
+		model,encoder_model,decoder_model=recover_model(model_filename)
 		if train:
 			#Only retrain and save if requested
 			for epoch in range(epochs):
@@ -352,11 +354,11 @@ def create_dnnspell(model_filepath,from_file,train,epochs,num_samples,filename,b
 							max_encoder_seq_length, num_encoder_tokens,
 							max_decoder_seq_length, num_decoder_tokens,
 							input_token_index,target_token_index)
-					train_model(model,encoder_input_data,decoder_input_data,decoder_target_data,1,model_filepath)
+					train_model(model,encoder_input_data,decoder_input_data,decoder_target_data,1,model_filename)
 	else:
 		#Create model, train and save it
 		model,encoder_inputs,encoder_states,decoder_inputs,decoder_lstm,decoder_dense=create_training_model(num_encoder_tokens,num_decoder_tokens)
-		train_model(model,encoder_input_data,decoder_input_data,decoder_target_data,epochs,model_filepath)
+		train_model(model,encoder_input_data,decoder_input_data,decoder_target_data,epochs,model_filename)
 		encoder_model,decoder_model=create_inference_model(encoder_inputs,encoder_states,decoder_inputs,decoder_lstm,decoder_dense)
 
 
@@ -369,8 +371,8 @@ def create_dnnspell(model_filepath,from_file,train,epochs,num_samples,filename,b
 		print('-')
 		print('Input sentence:', wrong_text[seq_index][::-1])
 		print('Decoded sentence:', decoded_sentence)
-def spell_checker(model_filepath,params_filename,word):
-	model,encoder_model,decoder_model=recover_model(model_filepath)
+def spell_checker(model_filename,params_filename,word):
+	model,encoder_model,decoder_model=recover_model(model_filename)
 
 	input_token_index,target_token_index,\
 			input_characters,target_characters,\
@@ -390,17 +392,17 @@ def spell_checker(model_filepath,params_filename,word):
 	print('Input sentence:', word)
 	print('Decoded sentence:', decoded_sentence)
 
-def plot_dnn(filepath):
-	model,encoder_model,decoder_model=recover_model(filepath)
+def plot_dnn(filename):
+	model,encoder_model,decoder_model=recover_model(filename)
 	plot_model(model, to_file='model.png')
 	plot_model(encoder_model, to_file='encoder_model.png')
 
 	plot_model(decoder_model, to_file='decoder_model.png')
 
-def check_accuracy(model_filepath,params_filename,read_filename,samples):
+def check_accuracy(model_filename,params_filename,read_filename,samples):
 	corrected_text=read_file(read_filename,samples)
 	wrong_text=[noise(text,2)[::-1] for text in corrected_text]
-	model,encoder_model,decoder_model=recover_model(model_filepath)
+	model,encoder_model,decoder_model=recover_model(model_filename)
 
 	input_token_index,target_token_index,\
 			input_characters,target_characters,\
@@ -426,114 +428,18 @@ def check_accuracy(model_filepath,params_filename,read_filename,samples):
 			success=success+1
 
 	print("Accuracy:",success/samples)
-def generate_sum_model(params_filename,read_filename,samples):
-	"""Generate the model"""
-	ops=read_file("examples_format.txt",samples)
-	results=[str(eval(text)) for text in ops]
-	ops=[w+'\n' for w in ops]
-	results=[w+'\n' for w in results]
-
-	input_token_index={'0':0,'1':1,'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'0':10,' ':11,'+':12,'-':13,'\n':14}
-	target_token_index=input_token_index
-	input_characters=['0','1','2','3','4','5','6','7','8','9','0',' ','+','-','\n']
-	target_characters=input_characters
-	max_encoder_seq_length=10
-	num_encoder_tokens=len(input_characters)
-	max_decoder_seq_length=4
-	num_decoder_tokens=num_encoder_tokens
-
-	encoder_input_data, decoder_input_data, decoder_target_data = text_to_matrix(ops, results,samples,
-			max_encoder_seq_length, num_decoder_tokens,
-			max_decoder_seq_length, num_decoder_tokens,
-			target_token_index,target_token_index)
-	initialization = "he_normal"
-	model = Sequential()
-	# "Encode" the input sequence using an RNN, producing an output of hidden_size
-	# note: in a situation where your input sequences have a variable length,
-	# use input_shape=(None, nb_feature).
-	for layer_number in range(LSTM_LAYERS):
-		model.add(recurrent.LSTM(latent_dim, input_shape=(None, num_decoder_tokens), kernel_initializer=initialization,
-			return_sequences=layer_number + 1 < LSTM_LAYERS))
-		model.add(Dropout(DROPOUT))
-		# For the decoder's input, we repeat the encoded input for each time step
-	model.add(RepeatVector(max_decoder_seq_length))
-	# The decoder RNN could be multiple layers stacked or a single layer
-	for _ in range(LSTM_LAYERS):
-		model.add(recurrent.LSTM(latent_dim, return_sequences=True, kernel_initializer=initialization))
-		model.add(Dropout(DROPOUT))
-
-	# For each of step of the output sequence, decide which character should be chosen
-	model.add(TimeDistributed(Dense(num_decoder_tokens, kernel_initializer=initialization)))
-	model.add(Activation('softmax'))
-
-	model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-	model.fit(encoder_input_data, decoder_input_data,
-			batch_size=batch_size,
-			epochs=epochs)
-	model.save("sum.h5")
-
-def load_sum_model(filepath,params_filename,read_filename,samples,train,epochs):
-	ops=read_file("examples_format.txt",samples)
-	results=[str(eval(text)) for text in ops]
-	ops=[w+'\n' for w in ops]
-	results=[w+'\n' for w in results]
-
-	input_token_index={'0':0,'1':1,'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'0':10,' ':11,'+':12,'-':13,'\n':14}
-	target_token_index=input_token_index
-	input_characters=['0','1','2','3','4','5','6','7','8','9','0',' ','+','-','\n']
-	target_characters=input_characters
-	max_encoder_seq_length=10
-	num_encoder_tokens=len(input_characters)
-	max_decoder_seq_length=4
-	num_decoder_tokens=num_encoder_tokens
-
-	encoder_input_data, decoder_input_data, decoder_target_data = text_to_matrix(ops, results,samples,
-			max_encoder_seq_length, num_decoder_tokens,
-			max_decoder_seq_length, num_decoder_tokens,
-			target_token_index,target_token_index)
-	model=load_model("sum.h5")
-	if train:
-		model.fit(encoder_input_data, decoder_input_data,
-				  batch_size=batch_size,
-				  epochs=epochs)
-		model.save("sum.h5")
-
-	for i in range(10):
-		input_seq = encoder_input_data[i:i+1]
-		target_sequence=model.predict(input_seq)
-
-		decoded_sentence = "".join([target_characters[np.argmax(token)] for token in target_sequence[0,:]])
-		if decoded_sentence.find("\n")!=-1:
-			decoded_sentence=decoded_sentence[0:decoded_sentence.find("\n")]
-		print('-')
-		print('Input sentence:', ops[i])
-		print('Decoded sentence:', decoded_sentence)
-		print('Expected sentence:', results[i])
-
-def generate_model(params_filename,read_filename,num_samples):
-	"""Generate the model"""
-	corrected_text=read_file(read_filename,num_samples)
-	wrong_text=[noise(text,2)+'\n' for text in corrected_text]
-
-	repeats=8
-	for i in range(repeats-1):
-		wrong_text.extend(noise(text,1) for text in corrected_text)
-
-	corrected_text=['\t'+text+'\n' for text in corrected_text]
-	corrected_text=corrected_text*repeats
-	samples=len(corrected_text)
 
 
+#####################################
+#### Alternative version of the spellchecker
+#####################################
+def create_seq2seq_model(model_filename,params_filename):
+	"""Create the model"""
 	input_token_index,target_token_index,\
 			input_characters,target_characters,\
 			max_encoder_seq_length,num_encoder_tokens,\
 			max_decoder_seq_length,num_decoder_tokens=get_parameters_from_file(params_filename)
 
-
-	encoder_input_data, decoder_input_data, decoder_target_data = text_to_matrix(wrong_text, corrected_text,samples,
-			max_encoder_seq_length, num_encoder_tokens,
-			max_decoder_seq_length, num_decoder_tokens,
-			target_token_index,target_token_index)
 	initialization = "he_normal"
 	model = Sequential()
 	# "Encode" the input sequence using an RNN, producing an output of hidden_size
@@ -557,87 +463,43 @@ def generate_model(params_filename,read_filename,num_samples):
 	model.add(Activation('softmax'))
 
 	model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-	model.fit(encoder_input_data, decoder_input_data,
-			batch_size=batch_size,
-			epochs=epochs,
-			validation_split=1/repeats)
-	model.save("attention.h5")
+	model.save(model_filename)
 
-def attention_model(params_filename,read_filename,samples):
-	corrected_text=read_file(read_filename,samples)
-	# wrong_text=[noise(text,2) for text in corrected_text]
-	# corrected_text=[text+'\n' for text in corrected_text]
-	# repeats=8
-	# for i in range(repeats-1):
-	# 	wrong_text.extend(noise(text,1) for text in corrected_text)
-	#
-	# corrected_text=corrected_text*repeats
-	#
-	# input_token_index,target_token_index,\
-	# 		input_characters,target_characters,\
-	# 		max_encoder_seq_length,num_encoder_tokens,\
-	# 		max_decoder_seq_length,num_decoder_tokens=get_parameters_from_file(params_filename)
-	#
-	# encoder_input_data, decoder_input_data, decoder_target_data = text_to_matrix(wrong_text, corrected_text,samples*repeats,
-	# 		max_encoder_seq_length, num_encoder_tokens,
-	# 		max_decoder_seq_length, num_decoder_tokens,
-	# 		input_token_index,target_token_index)
-	#
-	# model = AttentionSeq2Seq(input_dim=num_encoder_tokens, input_length=max_encoder_seq_length,
-	# 		hidden_dim=latent_dim,
-	# 		output_length=max_decoder_seq_length, output_dim=num_decoder_tokens,
-	# 		depth=LSTM_LAYERS,dropout=DROPOUT)
-	#
-	# model.compile(loss='mse', optimizer='rmsprop',metrics=['acc'])
-	# print(model.summary())
-	# model.fit(encoder_input_data, decoder_input_data,
-	# 		  batch_size=batch_size,
-	# 		  epochs=epochs,validation_split=0.125)
-	# model.save("attention.h5")
-
-	# for i in range(10):
-	# 	input_seq = encoder_input_data[i:i+1]
-	#
-	# 	target_sequence=model.predict(input_seq)
-	#
-	# 	decoded_sentence = "".join([target_characters[np.argmax(token)] for token in target_sequence[0,:]])
-	# 	if decoded_sentence.find("\n")!=-1:
-	# 		decoded_sentence=decoded_sentence[0:decoded_sentence.find("\n")]
-	# 	print('-')
-	# 	print('Input sentence:', wrong_text[i])
-	# 	print('Decoded sentence:', decoded_sentence)
-	# 	print('Expected sentence:', corrected_text[i])
-
-def load_autoencoder_model(filepath,params_filename,read_filename,num_samples,train,epochs):
-	corrected_text=read_file(read_filename,num_samples)
-	wrong_text=[noise(text,2)+'\n' for text in corrected_text]
-
-	repeats=8
-	for i in range(repeats-1):
-		wrong_text.extend(noise(text,1) for text in corrected_text)
-
-	corrected_text=['\t'+text+'\n' for text in corrected_text]
-	corrected_text=corrected_text*repeats
-	samples=len(corrected_text)
-
-
+def correct_sentence(model,params_filename,sentence):
+	word="\t"+sentence+"\n"
 	input_token_index,target_token_index,\
 			input_characters,target_characters,\
 			max_encoder_seq_length,num_encoder_tokens,\
 			max_decoder_seq_length,num_decoder_tokens=get_parameters_from_file(params_filename)
 
-	encoder_input_data, decoder_input_data, decoder_target_data = text_to_matrix(wrong_text, corrected_text,samples,
-			max_encoder_seq_length, num_decoder_tokens,
+	encoder_input_data, decoder_input_data, decoder_target_data = text_to_matrix([word], [word],1,
+			max_encoder_seq_length, num_encoder_tokens,
 			max_decoder_seq_length, num_decoder_tokens,
-			target_token_index,target_token_index)
+			input_token_index,target_token_index)
 
-	model=load_model(filepath)
-	if train:
-		model.fit(encoder_input_data, decoder_input_data,
-				  batch_size=batch_size,
-				  epochs=epochs)
-		model.save(filepath)
+	input_seq = encoder_input_data[0:1]
 
+	target_predict=model.predict(encoder_input_data)
+	target_sequence=target_predict[0:1]
+
+	decoded_sentence = "".join([target_characters[np.argmax(token)] for token in target_sequence[0,:]])
+	eos_index=decoded_sentence.find("\n")
+	if eos_index!=-1:
+		decoded_sentence=decoded_sentence[0:eos_index]
+
+
+	print('-')
+	print('Input sentence:', sentence)
+	print('Decoded sentence:', decoded_sentence)
+
+
+
+def load_seq2seq_model(model_filename):
+	"""Load generic model"""
+	return load_model(model_filename)
+
+def validate_model(corrected_text,wrong_text,encoder_input_data,target_characters):
+	samples=20
 	success=0
 	target_predict=model.predict(encoder_input_data)
 	for i in range(samples):
@@ -658,40 +520,71 @@ def load_autoencoder_model(filepath,params_filename,read_filename,num_samples,tr
 			print('Expected sentence:', corrected_text[i])
 
 	print("Accuracy:",success/samples)
-def load_attention(filepath,params_filename,read_filename,samples,train,epochs):
 
-	corrected_text=read_file(read_filename,samples)
-	# wrong_text=[noise(text,2) for text in corrected_text]
-	# corrected_text=[text+'\n' for text in corrected_text]
-	#
-	# input_token_index,target_token_index,\
-	# 		input_characters,target_characters,\
-	# 		max_encoder_seq_length,num_encoder_tokens,\
-	# 		max_decoder_seq_length,num_decoder_tokens=get_parameters_from_file(params_filename)
-	#
-	# encoder_input_data, decoder_input_data, decoder_target_data = text_to_matrix(wrong_text, corrected_text,samples,
-	# 		max_encoder_seq_length, num_encoder_tokens,
-	# 		max_decoder_seq_length, num_decoder_tokens,
-	# 		input_token_index,target_token_index)
-	#
-	# model = AttentionSeq2Seq(input_dim=num_encoder_tokens, input_length=max_encoder_seq_length,
-	# 		hidden_dim=latent_dim,
-	# 		output_length=max_decoder_seq_length, output_dim=num_decoder_tokens,
-	# 		depth=LSTM_LAYERS,dropout=DROPOUT)
-	#
-	# model.load_weights(filepath)
-	#
-	# for i in range(10):
-	# 	input_seq = encoder_input_data[i:i+1]
-	# 	target_sequence=model.predict(input_seq)
-	#
-	# 	decoded_sentence = "".join([target_characters[np.argmax(token)] for token in target_sequence[0,:]])
-	# 	if decoded_sentence.find("\n")!=-1:
-	# 		decoded_sentence=decoded_sentence[0:decoded_sentence.find("\n")]
-	# 	print('-')
-	# 	print('Input sentence:', wrong_text[i])
-	# 	print('Decoded sentence:', decoded_sentence)
-	# 	print('Expected sentence:', corrected_text[i])
+def train_model(model_filename,model,params_filename,samples_filename,num_samples,epochs,repeats):
+	corrected_text=read_file(samples_filename,num_samples)
+	wrong_text=[noise(text,2)+'\n' for text in corrected_text]
+
+	samples=len(corrected_text)*repeats
+	for i in range(repeats-1):
+		wrong_text.extend(noise(text,1) for text in corrected_text)
+
+	corrected_text=['\t'+text+'\n' for text in corrected_text]
+	corrected_text=corrected_text*repeats
+
+
+	input_token_index,target_token_index,\
+			input_characters,target_characters,\
+			max_encoder_seq_length,num_encoder_tokens,\
+			max_decoder_seq_length,num_decoder_tokens=get_parameters_from_file(params_filename)
+
+	encoder_input_data, decoder_input_data, decoder_target_data = text_to_matrix(wrong_text, corrected_text,samples,
+			max_encoder_seq_length, num_decoder_tokens,
+			max_decoder_seq_length, num_decoder_tokens,
+			target_token_index,target_token_index)
+
+	if epochs:
+		model.fit(encoder_input_data, decoder_input_data,
+				  batch_size=batch_size,
+				  epochs=epochs,
+				  validation_split=1/repeats)
+		model.save(model_filename)
+
+	validate_model(corrected_text,wrong_text,encoder_input_data,target_characters)
+
+#####################################
+#### Alternative version of the spellchecker, with attention
+#####################################
+
+def create_attention_model(model_filename,params_filename):
+	input_token_index,target_token_index,\
+			input_characters,target_characters,\
+			max_encoder_seq_length,num_encoder_tokens,\
+			max_decoder_seq_length,num_decoder_tokens=get_parameters_from_file(params_filename)
+
+	model = AttentionSeq2Seq(input_dim=num_encoder_tokens, input_length=max_encoder_seq_length,
+			hidden_dim=latent_dim,
+			output_length=max_decoder_seq_length, output_dim=num_decoder_tokens,
+			depth=LSTM_LAYERS,dropout=DROPOUT)
+
+	model.compile(loss='mse', optimizer='rmsprop',metrics=['acc'])
+	model.save(model_filename)
+
+def load_attention_model(model_filename,params_filename):
+	input_token_index,target_token_index,\
+			input_characters,target_characters,\
+			max_encoder_seq_length,num_encoder_tokens,\
+			max_decoder_seq_length,num_decoder_tokens=get_parameters_from_file(params_filename)
+
+	model = AttentionSeq2Seq(input_dim=num_encoder_tokens, input_length=max_encoder_seq_length,
+			hidden_dim=latent_dim,
+			output_length=max_decoder_seq_length, output_dim=num_decoder_tokens,
+			depth=LSTM_LAYERS,dropout=DROPOUT)
+
+	model.load_weights(model_filename)
+	model.compile(loss='mse', optimizer='rmsprop',metrics=['acc'])
+
+	return model
 
 
 if __name__=="__main__":
@@ -701,26 +594,25 @@ if __name__=="__main__":
 	num_samples=2000
 	samples_filename="words_2_format.txt"
 
-	model_filepath='dnnspell.h5'
+	model_filename='dnnspell.h5'
 	params_filename='dnnspell_params.txt'
 	from_file=False
-	train=True
-	epochs=1
+
+	epochs=0
+	repeats=8
 
 	parser = argparse.ArgumentParser(description='Create an autoencoder deep learning model.')
 
-	parser.add_argument('--load','-l', dest='model_filename',nargs="?", type=str,const=model_filepath,
+	parser.add_argument('--load','-l', dest='model_filename',nargs="?", type=str,const=model_filename,
 				help='loads the model from a file')
-	parser.add_argument('--train','-t',action='store_true',
-				help='train the model if it came from a file')
-	parser.add_argument('--samples','-s',dest='limit',type=int,
+
+	parser.add_argument('--samples','-s',dest='samples',type=int,
 				help='how many examples to train the model with (multiplied by 2, noisy and original samples)')
 	parser.add_argument('--epochs','-e',dest='epochs',type=int,
 				help='how many epochs to train the model')
 	parser.add_argument('--write','-w',action='store_true',
 				help='write parameters of samples to file')
-	parser.add_argument('--read','-r',action='store_true',
-				help='read parameters model from file')
+
 	parser.add_argument('--plot','-p',action='store_true',
 				help='plots the neural network into png')
 	parser.add_argument('--correct','-c',dest='predict', type=str,
@@ -731,40 +623,52 @@ if __name__=="__main__":
 				help='check the accuracy of the model')
 	parser.add_argument('--attention','-a',action='store_true',
 				help='try the attention model')
+	parser.add_argument('--seq2seq',action='store_true',
+				help='try the seq2seq model')
 	args = parser.parse_args()
 	if args.model_filename:
-		model_filepath=args.model_filename
+		model_filename=args.model_filename
 		from_file=True
-		train=args.train
 
 	bigrams=args.bigrams
 
 	if bigrams:
 		samples_filename="bigrams_format.txt"
-	if args.limit is not None:
-		num_samples=args.limit
+	if args.samples is not None:
+		num_samples=args.samples
 	if args.epochs is not None:
 		epochs=args.epochs
 
 	if args.predict:
-		spell_checker(model_filepath,params_filename,args.predict)
-	elif args.validate:
+		model=None
 		if args.attention:
-			train=args.train
-			load_autoencoder_model("attention.h5",params_filename,samples_filename,num_samples,train,epochs)
-			#load_sum_model("attention.h5",params_filename,samples_filename,num_samples,train,epochs)
-			#load_attention("attention.h5",params_filename,samples_filename,num_samples,train,epochs)
+			model=load_attention_model(model_filename,params_filename)
+		elif args.seq2seq:
+			model=load_seq2seq_model(model_filename)
+		if model:
+			correct_sentence(model,params_filename,args.predict)
 		else:
-			check_accuracy(model_filepath,params_filename,samples_filename,num_samples)
-	elif args.plot:
-		plot_dnn(model_filepath)
+			spell_checker(model_filename,params_filename,args.predict)
+
+
+	elif args.validate:
+		model=None
+		if args.attention:
+			model=load_attention_model(model_filename,params_filename)
+		elif args.seq2seq:
+			model=load_seq2seq_model(model_filename)
+		if model:
+			train_model(model_filename,model,params_filename,samples_filename,num_samples,epochs,repeats)
+		else:
+			check_accuracy(model_filename,params_filename,samples_filename,num_samples)
 	elif args.attention:
-		generate_model(params_filename,samples_filename,num_samples)
-		#generate_sum_model(params_filename,samples_filename,num_samples)
-		#attention_model(params_filename,samples_filename,num_samples)
+		create_attention_model(model_filename,params_filename)
+	elif args.seq2seq:
+		create_seq2seq_model(model_filename,params_filename)
+	elif args.plot:
+		plot_dnn(model_filename)
 	elif args.write:
 		save_parameters_to_file(samples_filename,params_filename)
 	else:
-		create_dnnspell(model_filepath,from_file,train,epochs,
-			num_samples,samples_filename,bigrams,
-			params_filename if args.read else None)
+		create_dnnspell(model_filename,from_file,epochs,
+			num_samples,samples_filename,bigrams,params_filename)
