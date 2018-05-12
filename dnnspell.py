@@ -350,7 +350,7 @@ def validate_autoencoder_model(model_filename,epochs,num_samples,samples_filenam
 				          epochs=1,
 				          validation_split=1/repeats)
 				# Save model
-		model.save(model_filename)
+				model.save(model_filename)
 
 
 	samples=20
@@ -562,7 +562,7 @@ if __name__=="__main__":
 
 	#If num_samples <=0, then take all examples
 	num_samples=2000
-	samples_filename="words_2_format.txt"
+	samples_filename="words_format.txt"
 
 	model_filename='dnnspell.h5'
 	params_filename='dnnspell_params.txt'
