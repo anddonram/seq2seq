@@ -315,11 +315,7 @@ def validate_autoencoder_model(model_filename,epochs,num_samples,samples_filenam
 	corrected_text=['\t'+text+'\n' for text in corrected_text]
 	corrected_text=corrected_text*repeats
 
-	input_token_index,target_token_index,\
-		input_characters,target_characters,\
-		wrong_freq,corrected_freq=generate_tokens(wrong_text,corrected_text)
 
-	print(input_token_index)
 	num_texts=len(wrong_text)
 
 	input_token_index,target_token_index,\
