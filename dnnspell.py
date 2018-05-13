@@ -604,6 +604,7 @@ if __name__=="__main__":
 
 	if bigrams:
 		samples_filename="bigrams_format.txt"
+		params_filename='bigrams_params.txt'
 	if args.samples is not None:
 		num_samples=args.samples
 	if args.epochs is not None:
