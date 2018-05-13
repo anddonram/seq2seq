@@ -469,7 +469,7 @@ def load_seq2seq_model(model_filename):
 	"""Load generic model"""
 	return load_model(model_filename)
 
-def validate_model(corrected_text,wrong_text,encoder_input_data,target_characters):
+def model_accuracy(corrected_text,wrong_text,encoder_input_data,target_characters):
 	samples=20
 	success=0
 	target_predict=model.predict(encoder_input_data)
@@ -522,7 +522,7 @@ def validate_model(model_filename,model,params_filename,samples_filename,num_sam
 				  validation_split=1/repeats,
 				  callbacks=[checkpointer])
 
-	validate_model(corrected_text,wrong_text,encoder_input_data,target_characters)
+	model_accuracy(corrected_text,wrong_text,encoder_input_data,target_characters)
 
 #####################################
 #### Alternative version of the spellchecker, with attention
