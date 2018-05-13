@@ -2,6 +2,7 @@
 from keras.models import Model,Sequential,load_model
 from keras.layers import Dense,Dropout, RepeatVector, Activation, LSTM, TimeDistributed, Input,recurrent,Masking
 from keras.utils.vis_utils import plot_model
+from keras.callbacks import ModelCheckpoint
 import numpy as np
 import random
 from nltk import FreqDist
@@ -514,11 +515,12 @@ def validate_model(model_filename,model,params_filename,samples_filename,num_sam
 			target_token_index,target_token_index)
 
 	if epochs:
+		checkpointer = ModelCheckpoint(filepath=model_filename, monitor='val_acc', verbose=0, save_best_only=True)
 		model.fit(encoder_input_data, decoder_input_data,
 				  batch_size=batch_size,
 				  epochs=epochs,
-				  validation_split=1/repeats)
-		model.save(model_filename)
+				  validation_split=1/repeats,
+				  callbacks=[checkpointer])
 
 	validate_model(corrected_text,wrong_text,encoder_input_data,target_characters)
 
