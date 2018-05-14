@@ -372,25 +372,27 @@ def validate_autoencoder_model(model_filename,epochs,num_samples,samples_filenam
 			print('Expected sentence:', corrected_text[seq_index])
 
 	print("Accuracy:",success/samples)
-def spell_checker(model_filename,params_filename,word):
+def spell_checker(model_filename,params_filename,sentence):
 	model,encoder_model,decoder_model=recover_model(model_filename)
-
+	words=[word+"\n" for word in sentence.split(" ")]
 	input_token_index,target_token_index,\
 			input_characters,target_characters,\
 			max_encoder_seq_length,num_encoder_tokens,\
 			max_decoder_seq_length,num_decoder_tokens=get_parameters_from_file(params_filename)
 
-	encoder_input_data, decoder_input_data, decoder_target_data = text_to_matrix([word[::-1]], [word],1,
+	encoder_input_data, decoder_input_data, decoder_target_data = text_to_matrix(words, words,len(words),
 			max_encoder_seq_length, num_encoder_tokens,
 			max_decoder_seq_length, num_decoder_tokens,
 			input_token_index,target_token_index)
 
-	input_seq = encoder_input_data[0:1]
-
-	decoded_sentence = decode_sequence(input_seq,input_characters,target_characters,
+	decoded_sentence=""
+	for input in encoder_input_data:
+		input_seq =np.expand_dims(input, axis=0)
+		decoded_sentence += decode_sequence(input_seq,input_characters,target_characters,
 				encoder_model,decoder_model,num_decoder_tokens,target_token_index,max_decoder_seq_length)
+		decoded_sentence+=" "
 	print('-')
-	print('Input sentence:', word)
+	print('Input sentence:', sentence)
 	print('Decoded sentence:', decoded_sentence)
 
 def plot_dnn(filename):
@@ -437,28 +439,26 @@ def create_seq2seq_model(model_filename,params_filename):
 	model.save(model_filename)
 
 def correct_sentence(model,params_filename,sentence):
-	word="\t"+sentence+"\n"
+	words=[word+"\n" for word in sentence.split(" ")]
+
 	input_token_index,target_token_index,\
 			input_characters,target_characters,\
 			max_encoder_seq_length,num_encoder_tokens,\
 			max_decoder_seq_length,num_decoder_tokens=get_parameters_from_file(params_filename)
 
-	encoder_input_data, decoder_input_data, decoder_target_data = text_to_matrix([word], [word],1,
+	encoder_input_data, decoder_input_data, decoder_target_data = text_to_matrix(words, words,len(words),
 			max_encoder_seq_length, num_encoder_tokens,
 			max_decoder_seq_length, num_decoder_tokens,
 			input_token_index,target_token_index)
 
-	input_seq = encoder_input_data[0:1]
-
+	decoded_sentence=""
 	target_predict=model.predict(encoder_input_data)
-	target_sequence=target_predict[0:1]
-
-	decoded_sentence = "".join([target_characters[np.argmax(token)] for token in target_sequence[0,:]])
-	eos_index=decoded_sentence.find("\n")
-	if eos_index!=-1:
-		decoded_sentence=decoded_sentence[0:eos_index]
-
-
+	for target_sequence in target_predict:
+		decoded_sentence += "".join([target_characters[np.argmax(token)] for token in target_sequence])
+		eos_index=decoded_sentence.find("\n")
+		if eos_index!=-1:
+			decoded_sentence=decoded_sentence[0:eos_index]
+		decoded_sentence+=" "
 	print('-')
 	print('Input sentence:', sentence)
 	print('Decoded sentence:', decoded_sentence)
